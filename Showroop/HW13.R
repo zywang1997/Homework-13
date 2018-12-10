@@ -1,0 +1,78 @@
+#library(dplyr)
+#library(caret)
+#library(nnet)
+
+getAccuracy <- function(df)
+{
+  logical <- df$TrueValue == df$Prediction
+  sum <- sum(logical)
+  pred_accuracy <- sum/nrow(df)
+  return(pred_accuracy)
+}
+
+#mtrain <- read.csv("~/Desktop/HW13/Data/mnist_train.csv", header = T, stringsAsFactors = F)
+#mtest <- read.csv("~/Desktop/HW13/Data/mnist_test.csv",header = T, stringsAsFactors = F )
+logical <- mtrain$X5==3
+mtrain$isThree <- factor(as.numeric(logical))
+
+#Subsetting to the first 1000 rows 
+mtrain <- mtrain[1:1000,]
+
+#Variables
+response <- "isThree"
+predictors <- setdiff(names(mtrain),c(names(mtrain)[1],response))
+
+# Data Preparation
+y <- mtrain$isThree
+x <- dplyr::select(mtrain, predictors)
+names(x) <- NULL
+x <- x/255 #Normalizing the X values. I did some digging online and lot of the articles suggest to divide by 255 b/c it is the maximum RGB code minus the minimum RGB code
+
+#Model
+tuning_df1 <- data.frame(size=1, decay=0)
+tuning_df2 <- data.frame(size=2, decay=0)
+tuning_df3 <- data.frame(size=3, decay=0)
+tuning_df <- data.frame(size=1:20, decay=0)
+
+fitControl1 <- trainControl(method = "none")
+fitControl <- trainControl(method = "repeatedcv",number = 2,repeats = 5)
+
+model1 <- caret::train(x=x, y=y, method="nnet",trControl = fitControl1, tuneGrid=tuning_df1, maxit=1000000000)
+model2 <- caret::train(x=x, y=y, method="nnet",trControl = fitControl1, tuneGrid=tuning_df2, maxit=1000000000)
+model3 <- caret::train(x=x, y=y, method="nnet",trControl = fitControl1, tuneGrid=tuning_df3, maxit=1000000000)
+model4 <- caret::train(x=x, y=y, method="nnet",trControl = fitControl, tuneGrid=tuning_df, maxit=1000000000)
+
+#Predictions
+x_test <- mtest[,-1]
+names(x_test) <- NULL
+prediction1 <- predict(model1,x_test)
+prediction2 <- predict(model2,x_test)
+prediction3 <- predict(model3, x_test)
+
+fit_df1 <- data.frame(TrueValue=as.numeric(mtest$X7==3), Prediction=prediction1)
+fit_df2 <- data.frame(TrueValue=as.numeric(mtest$X7==3), Prediction=prediction2)
+fit_df3 <- data.frame(TrueValue=as.numeric(mtest$X7==3), Prediction=prediction3)
+
+
+accuracy1 <- getAccuracy(fit_df1)
+accuracy2 <- getAccuracy(fit_df2)
+accuracy3 <- getAccuracy(fit_df3)
+
+df <- data.frame(Nodes=c(1,2,3), Accuracy=c(accuracy1,accuracy2, accuracy3))
+knitr::kable(df,caption = "Accuracy in the Validation Dataset")
+knitr::kable(model4$results, caption = "Number of nodes and corresponding accuracy of model in Training Set")
+
+
+
+#Changing the decay parameter as well 
+
+tuning <- data.frame(size=rep(1,21), decay=seq(0,2,0.1))
+fitControl <- trainControl(method = "repeatedcv",number = 2,repeats = 2)
+model <- caret::train(x=x, y=y, method="nnet",trControl = fitControl, tuneGrid=tuning, maxit=1000000000)
+
+prediction <- predict(model,x_test)
+fit_df <- data.frame(TrueValue=as.numeric(mtest$X7==3), Prediction=prediction)
+accuracy <- getAccuracy(fit_df)
+knitr::kable(model$results, caption = "Varying decay and corresponding accuracy of model in Training Set")
+print(c("The accuracy of the best model (size=1, decay=2) in validation set is ", accuracy))
+
